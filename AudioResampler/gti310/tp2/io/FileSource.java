@@ -5,8 +5,6 @@ import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /**
  * A FileSource object opens a handle on a file and sends the data in sequential
@@ -78,6 +76,10 @@ public class FileSource {
 			return null;
 		}
 	}
+	
+	/*
+	 * Custom methods
+	 */
 
 	public DataInputStream skip(int size) {
 		try {
@@ -90,13 +92,5 @@ public class FileSource {
 			/* something went wrong, or EOF reached */
 			return null;
 		}
-	}
-	
-	/**
-	 * Returns the ByteBuffer of a little endian
-	 */
-	public ByteBuffer read_littleEndian(byte[] buffer){
-		return ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN);
-	}
-	
+	}	
 }
