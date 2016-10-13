@@ -11,7 +11,7 @@ public class Application {
 	 *            This parameter is ignored
 	 */
 	public static void main(String args[]) {
-		System.out.println("Audio Resample project!");
+		System.out.println("Audio Resample project!\n");
 
 		new WavAudioFilter(args[0], args[1]).process();
 	}
