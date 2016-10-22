@@ -165,7 +165,6 @@ public class WavAudioFilter implements AudioFilter {
 			// Done, closing file
 			wavFileIn.close();
 
-			System.out.println("[INFO] Done compressing!");
 		} catch (FileNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -196,62 +195,16 @@ public class WavAudioFilter implements AudioFilter {
 		/* We round the double to closest int */
 		Integer newSubchunk2Size = (int) Math.round(newSubchunk2SizeDouble);
 		byte[] newData_bytes = new byte[newSubchunk2Size];
-		/* Setting sampleRate to 8000 */
+		/* Setting file parameters for 8000Hz */
 		newSampleRate_bytes = create_littleEndian(4, resampleRate);
 		newByteRate_bytes = create_littleEndian(4, resampleRate * numChannels * bitsPerSample / 8);
 		newBlockAlign_bytes = create_littleEndian(2, numChannels * bitsPerSample / 8);
-		/*
-		 * (Microsoft%20WAVE%20soundfile%20format.htm)
-		 */
 		newSubchunk2Size_bytes = create_littleEndian(4, newSubchunk2Size);
 		newChunkSize_bytes = create_littleEndian(4, 36 + newSubchunk2Size);
 
-		if (numChannels == 1) {
-			if (bitsPerSample == 8) {
-				// Reading 1 byte (8 bits)
-				int j = 0;
-				int bytePosToRead = 0;
-				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
-					bytePosToRead = (int) Math.round(i);
-					if (j <= newSubchunk2Size) {
-						System.arraycopy(data_bytes, bytePosToRead, newData_bytes, j, 1);
-						j++;
-					}
-				}
-				/*
-				 * DEBUG PURPOSE
-				 */
-				System.out.println(subchunk2Size);
-				System.out.println(bytePosToRead);
-				
-				System.out.println(newSubchunk2Size);
-				System.out.println(j);
-				System.out.println(bytePosToRead/j);
-				System.out.println(data_bytes[bytePosToRead]);
-				System.out.println(newData_bytes[j-1]);
-			}
-			if (bitsPerSample == 16) {
-				// Reading 2 bytes (16 bits)
-				int j = 0;
-				for (int i = 0; i < subchunk2Size; i += resampleFactor) {
-					byte[] sample_bytes = new byte[2];
-					sample_bytes[0] = data_bytes[i];
-					sample_bytes[1] = data_bytes[i];
-					if (j < newSubchunk2Size) {
-						System.arraycopy(data_bytes, i, newData_bytes, j, 1);
-						j++;
-					}
-				}
-			}
-		}
-		if (numChannels == 2) {
-			if (bitsPerSample == 8) {
-				// Reading 1 byte (8 bits)
-			}
-			if (bitsPerSample == 16) {
-				// Reading 2 bytes (16 bits)
-			}
-		}
+		/* Resampling function */
+		resample(resampleFactor, newSubchunk2Size, newData_bytes);
+
 		wavFileOut.push(chunkId_bytes); // ok
 		wavFileOut.push(newChunkSize_bytes);
 		wavFileOut.push(format_bytes); // ok
@@ -269,6 +222,7 @@ public class WavAudioFilter implements AudioFilter {
 		// Done, closing file
 		wavFileOut.close();
 
+		System.out.println("[INFO] Done compressing!");
 	}
 
 	/**
@@ -332,5 +286,89 @@ public class WavAudioFilter implements AudioFilter {
 	 */
 	public ByteBuffer read_littleEndian(byte[] buffer) {
 		return ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN);
+	}
+
+	public void resample(Double resampleFactor, Integer newSubchunk2Size, byte[] newData_bytes) {
+		int j = 0;
+		int bytePosToRead = 0;
+		if (numChannels == 1) {
+			if (bitsPerSample == 8) {
+				// Reading 1 byte (1*8 bits - 1 byte per sample)
+				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+					bytePosToRead = (int) Math.round(i);
+					if (j <= newSubchunk2Size) {
+						System.arraycopy(data_bytes, bytePosToRead, newData_bytes, j, 1);
+						j++;
+					}
+				}
+				/*
+				 * DEBUG PURPOSE
+				 */
+				System.out.println(newSubchunk2Size);
+				System.out.println(j);
+				System.out.println(subchunk2Size);
+				System.out.println(bytePosToRead);
+				System.out.println(bytePosToRead / j);
+				System.out.println(data_bytes[bytePosToRead]);
+				System.out.println(newData_bytes[j - 1]);
+			}
+			if (bitsPerSample == 16) {
+				// Reading 2 bytes (1*16 bits - 2 bytes per sample)
+				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+					bytePosToRead = (int) Math.round(i);
+					if (bytePosToRead % 2 == 0) {
+						byte[] sampleBytes = new byte[2];
+						sampleBytes[0] = data_bytes[bytePosToRead];
+						sampleBytes[1] = data_bytes[bytePosToRead + 1];
+						if (j <= newSubchunk2Size) {
+							System.arraycopy(sampleBytes, 0, newData_bytes, j, 2);
+							j = j + 2;
+						}
+					}
+				}
+				System.out.println(newSubchunk2Size);
+				System.out.println(j);
+			}
+		}
+		if (numChannels == 2) {
+			if (bitsPerSample == 8) {
+				// Reading 2 bytes (2*8 bits - 1 byte on the left & 1 byte on
+				// the right)
+				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+					bytePosToRead = (int) Math.round(i);
+					if (bytePosToRead % 2 == 0) {
+						byte[] sampleBytes = new byte[2];
+						sampleBytes[0] = data_bytes[bytePosToRead];
+						sampleBytes[1] = data_bytes[bytePosToRead + 1];
+						if (j <= newSubchunk2Size) {
+							System.arraycopy(sampleBytes, 0, newData_bytes, j, 2);
+							j = j + 2;
+						}
+					}
+				}
+				System.out.println(newSubchunk2Size);
+				System.out.println(j);
+			}
+			if (bitsPerSample == 16) {
+				// Reading 4 bytes (2*16 bits - 2 bytes on the left & 2 bytes on
+				// the right)
+				for (double i = 0; i < subchunk2Size; i += resampleFactor*2) {
+					bytePosToRead = (int) Math.round(i);
+					if (bytePosToRead % 2 == 0 && (subchunk2Size - bytePosToRead) >= 4) {
+						byte[] sampleBytes = new byte[4];
+						sampleBytes[0] = data_bytes[bytePosToRead];
+						sampleBytes[1] = data_bytes[bytePosToRead + 1];
+						sampleBytes[2] = data_bytes[bytePosToRead + 2];
+						sampleBytes[3] = data_bytes[bytePosToRead + 3];
+						if (j <= newSubchunk2Size - 4) {
+							System.arraycopy(sampleBytes, 0, newData_bytes, j, 4);
+							j = j + 4;
+						}
+					}
+				}
+				System.out.println(newSubchunk2Size);
+				System.out.println(j);
+			}
+		}
 	}
 }
