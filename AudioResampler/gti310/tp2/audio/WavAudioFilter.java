@@ -209,21 +209,38 @@ public class WavAudioFilter implements AudioFilter {
 		if (numChannels == 1) {
 			if (bitsPerSample == 8) {
 				// Reading 1 byte (8 bits)
-				for (int i = 0; i < newSubchunk2Size; i++) {
-					// byte[] sample_bytes = new byte[2];
-					// sample_bytes[1] = data_bytes[i];
-					// sample_bytes[0] = 0x00;
-					// System.arraycopy(sample_bytes, i, newData_bytes, i,
-					// data_bytes.length);
-					newData_bytes[i] = data_bytes[i];
-					// double data = data_bytes[i] / resampleFactor;
-					// newData_bytes[i] = data_byte;
+				int j = 0;
+				int bytePosToRead = 0;
+				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+					bytePosToRead = (int) Math.round(i);
+					if (j <= newSubchunk2Size) {
+						System.arraycopy(data_bytes, bytePosToRead, newData_bytes, j, 1);
+						j++;
+					}
 				}
+				/*
+				 * DEBUG PURPOSE
+				 */
+				System.out.println(subchunk2Size);
+				System.out.println(bytePosToRead);
+				
+				System.out.println(newSubchunk2Size);
+				System.out.println(j);
+				System.out.println(bytePosToRead/j);
+				System.out.println(data_bytes[bytePosToRead]);
+				System.out.println(newData_bytes[j-1]);
 			}
 			if (bitsPerSample == 16) {
 				// Reading 2 bytes (16 bits)
-				for (int i = 0; i < 15; i += 2) {
-
+				int j = 0;
+				for (int i = 0; i < subchunk2Size; i += resampleFactor) {
+					byte[] sample_bytes = new byte[2];
+					sample_bytes[0] = data_bytes[i];
+					sample_bytes[1] = data_bytes[i];
+					if (j < newSubchunk2Size) {
+						System.arraycopy(data_bytes, i, newData_bytes, j, 1);
+						j++;
+					}
 				}
 			}
 		}
