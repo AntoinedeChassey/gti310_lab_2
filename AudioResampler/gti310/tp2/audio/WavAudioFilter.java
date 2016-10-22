@@ -187,42 +187,43 @@ public class WavAudioFilter implements AudioFilter {
 		byte[] newByteRate_bytes;
 		byte[] newBlockAlign_bytes;
 		byte[] newSubchunk2Size_bytes;
-		byte[] newData_bytes = new byte[subchunk2Size];
-
+		/*
+		 * Setting the new size of the file (44100Hz -> 8000Hz makes a factor of
+		 * 5.5125
+		 */
+		Double resampleFactor = sampleRate.doubleValue() / resampleRate.doubleValue();
+		Double newSubchunk2SizeDouble = (Double) (subchunk2Size / resampleFactor);
+		/* We round the double to closest int */
+		Integer newSubchunk2Size = (int) Math.round(newSubchunk2SizeDouble);
+		byte[] newData_bytes = new byte[newSubchunk2Size];
 		/* Setting sampleRate to 8000 */
 		newSampleRate_bytes = create_littleEndian(4, resampleRate);
 		newByteRate_bytes = create_littleEndian(4, resampleRate * numChannels * bitsPerSample / 8);
 		newBlockAlign_bytes = create_littleEndian(2, numChannels * bitsPerSample / 8);
 		/*
-		 * ??? to be modified with correct numSamples
-		 * (Microsoft%20WAVE%20soundfile%20format.htm) je crois qu'il n'y a pas
-		 * besoin de changer subChunk2size en fait ca doit etre le meme..
+		 * (Microsoft%20WAVE%20soundfile%20format.htm)
 		 */
-		// newSubchunk2Size_bytes = create_littleEndian(4, subchunk2Size / 4 *
-		// numChannels * bitsPerSample / 8);
-		newSubchunk2Size_bytes = subchunk2Size_bytes;
-		newChunkSize_bytes = create_littleEndian(4, 36 + read_littleEndian(newSubchunk2Size_bytes).getInt());
-
-		Double resampleFactor = sampleRate.doubleValue() / resampleRate.doubleValue();
-		System.out.println(read_littleEndian(data_bytes));
+		newSubchunk2Size_bytes = create_littleEndian(4, newSubchunk2Size);
+		newChunkSize_bytes = create_littleEndian(4, 36 + newSubchunk2Size);
 
 		if (numChannels == 1) {
 			if (bitsPerSample == 8) {
 				// Reading 1 byte (8 bits)
-				for (int i = 0; i < 15; i++) {
-								
-					byte[] sample_bytes = new byte[2];
-					sample_bytes[0] = data_bytes[i];
-					sample_bytes[1] = 0x00;
-					System.arraycopy(sample_bytes, 0, newData_bytes, newData_bytes.length, sample_bytes.length);
+				for (int i = 0; i < newSubchunk2Size; i++) {
+					// byte[] sample_bytes = new byte[2];
+					// sample_bytes[1] = data_bytes[i];
+					// sample_bytes[0] = 0x00;
+					// System.arraycopy(sample_bytes, i, newData_bytes, i,
+					// data_bytes.length);
+					newData_bytes[i] = data_bytes[i];
 					// double data = data_bytes[i] / resampleFactor;
 					// newData_bytes[i] = data_byte;
 				}
 			}
 			if (bitsPerSample == 16) {
 				// Reading 2 bytes (16 bits)
-				for (int i = 0; i < 15; i+=2) {
-					
+				for (int i = 0; i < 15; i += 2) {
+
 				}
 			}
 		}
@@ -234,8 +235,6 @@ public class WavAudioFilter implements AudioFilter {
 				// Reading 2 bytes (16 bits)
 			}
 		}
-		newData_bytes = data_bytes;
-
 		wavFileOut.push(chunkId_bytes); // ok
 		wavFileOut.push(newChunkSize_bytes);
 		wavFileOut.push(format_bytes); // ok
@@ -250,7 +249,6 @@ public class WavAudioFilter implements AudioFilter {
 		wavFileOut.push(subchunk2Id_bytes); // ok
 		wavFileOut.push(newSubchunk2Size_bytes);
 		wavFileOut.push(newData_bytes);
-
 		// Done, closing file
 		wavFileOut.close();
 
