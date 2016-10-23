@@ -284,11 +284,25 @@ public class WavAudioFilter implements AudioFilter {
 	/**
 	 * Returns the ByteBuffer of a little endian
 	 */
-	public ByteBuffer read_littleEndian(byte[] buffer) {
+	private ByteBuffer read_littleEndian(byte[] buffer) {
 		return ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN);
 	}
 
-	public void resample(Double resampleFactor, Integer newSubchunk2Size, byte[] newData_bytes) {
+	/**
+	 * Linear interpolation function a_inf = a b_inf = f(a) a_sup = b b_sup =
+	 * f(b) a_int = c Returns f(c)
+	 */
+	private byte interpolate(int a_inf, int a_sup, byte b_inf, byte b_sup, double a_int) {
+//		System.out.println("f(a): " + b_inf);
+//		System.out.println("f(b): " + b_sup);
+//		System.out.println((b_sup - b_inf));
+//		System.out.println((a_int - a_inf));
+//		System.out.println((a_sup - a_inf));
+		byte result = (byte) (b_inf + (((b_sup - b_inf) * (a_int - a_inf)) / (a_sup - a_inf)));
+		return result;
+	}
+
+	private void resample(Double resampleFactor, Integer newSubchunk2Size, byte[] newData_bytes) {
 		int j = 0;
 		int bytePosToRead = 0;
 		if (numChannels == 1) {
@@ -316,11 +330,17 @@ public class WavAudioFilter implements AudioFilter {
 				// Reading 2 bytes (1*16 bits - 2 bytes per sample)
 				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
 					bytePosToRead = (int) Math.round(i);
-					if (bytePosToRead % 2 == 0) {
+					if (bytePosToRead == 0) {
+						System.arraycopy(data_bytes, bytePosToRead, newData_bytes, 0, 2);
+					} else if (bytePosToRead % 2 == 0) {
 						byte[] sampleBytes = new byte[2];
-						sampleBytes[0] = data_bytes[bytePosToRead];
-						sampleBytes[1] = data_bytes[bytePosToRead + 1];
+						sampleBytes[0] = interpolate(bytePosToRead - 1, bytePosToRead, data_bytes[bytePosToRead - 1],
+								data_bytes[bytePosToRead], i);
+						sampleBytes[1] = interpolate(bytePosToRead, bytePosToRead + 1, data_bytes[bytePosToRead],
+								data_bytes[bytePosToRead + 1], i+1);
 						if (j <= newSubchunk2Size) {
+							if (j == 0)
+								j = 2;
 							System.arraycopy(sampleBytes, 0, newData_bytes, j, 2);
 							j = j + 2;
 						}
@@ -352,7 +372,7 @@ public class WavAudioFilter implements AudioFilter {
 			if (bitsPerSample == 16) {
 				// Reading 4 bytes (2*16 bits - 2 bytes on the left & 2 bytes on
 				// the right)
-				for (double i = 0; i < subchunk2Size; i += resampleFactor*2) {
+				for (double i = 0; i < subchunk2Size; i += resampleFactor * 2) {
 					bytePosToRead = (int) Math.round(i);
 					if (bytePosToRead % 2 == 0 && (subchunk2Size - bytePosToRead) >= 4) {
 						byte[] sampleBytes = new byte[4];
