@@ -33,7 +33,7 @@ public class WavAudioFilter implements AudioFilter {
 	private Short bitsPerSample; // little endian
 	private String subchunk2Id; // big endian
 	private Integer subchunk2Size; // little endian
-	private ByteBuffer data; // little endian
+	private ByteBuffer data_buffer; // little endian
 
 	private byte[] chunkId_bytes; // big endian
 	private byte[] chunkSize_bytes; // little endian
@@ -159,8 +159,8 @@ public class WavAudioFilter implements AudioFilter {
 
 			// Data
 			data_bytes = wavFileIn.pop(subchunk2Size);
-			data = read_littleEndian(data_bytes);
-			System.out.println("Data: " + data);
+			data_buffer = read_littleEndian(data_bytes);
+			System.out.println("Data: " + data_buffer);
 
 			// Done, closing file
 			wavFileIn.close();
@@ -278,7 +278,6 @@ public class WavAudioFilter implements AudioFilter {
 					.array();
 		}
 		return bytes;
-
 	}
 
 	/**
@@ -292,13 +291,11 @@ public class WavAudioFilter implements AudioFilter {
 	 * Linear interpolation function a_inf = a b_inf = f(a) a_sup = b b_sup =
 	 * f(b) a_int = c Returns f(c)
 	 */
-	private byte interpolate(int a_inf, int a_sup, byte b_inf, byte b_sup, double a_int) {
-//		System.out.println("f(a): " + b_inf);
-//		System.out.println("f(b): " + b_sup);
-//		System.out.println((b_sup - b_inf));
-//		System.out.println((a_int - a_inf));
-//		System.out.println((a_sup - a_inf));
-		byte result = (byte) (b_inf + (((b_sup - b_inf) * (a_int - a_inf)) / (a_sup - a_inf)));
+	private byte interpolate(int a_inf, int a_sup, byte b_inf, byte b_sup, float a_int) {
+		// Setting bytes to their unsigned values
+		int b_infInt = b_inf & 0xff;
+		int b_supInt = b_sup & 0xff;
+		byte result = (byte) (b_infInt + (((b_supInt - b_infInt) * (a_int - a_inf)) / (a_sup - a_inf)));
 		return result;
 	}
 
@@ -308,39 +305,33 @@ public class WavAudioFilter implements AudioFilter {
 		if (numChannels == 1) {
 			if (bitsPerSample == 8) {
 				// Reading 1 byte (1*8 bits - 1 byte per sample)
-				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+				for (float i = 0; i < subchunk2Size; i += resampleFactor) {
 					bytePosToRead = (int) Math.round(i);
-					if (j <= newSubchunk2Size) {
-						System.arraycopy(data_bytes, bytePosToRead, newData_bytes, j, 1);
+					if (j < newSubchunk2Size) {
+						byte byteToStore = interpolate(bytePosToRead, bytePosToRead + 1, data_bytes[bytePosToRead],
+								data_bytes[bytePosToRead + 1], i);
+						// System.arraycopy(data_bytes, bytePosToRead,
+						// newData_bytes, j, 1);
+						newData_bytes[j] = byteToStore;
 						j++;
 					}
 				}
-				/*
-				 * DEBUG PURPOSE
-				 */
 				System.out.println(newSubchunk2Size);
 				System.out.println(j);
-				System.out.println(subchunk2Size);
-				System.out.println(bytePosToRead);
-				System.out.println(bytePosToRead / j);
-				System.out.println(data_bytes[bytePosToRead]);
-				System.out.println(newData_bytes[j - 1]);
 			}
 			if (bitsPerSample == 16) {
 				// Reading 2 bytes (1*16 bits - 2 bytes per sample)
-				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+				for (float i = 0; i < subchunk2Size; i += resampleFactor) {
 					bytePosToRead = (int) Math.round(i);
-					if (bytePosToRead == 0) {
-						System.arraycopy(data_bytes, bytePosToRead, newData_bytes, 0, 2);
-					} else if (bytePosToRead % 2 == 0) {
+					if (bytePosToRead % 2 == 0) {
 						byte[] sampleBytes = new byte[2];
-						sampleBytes[0] = interpolate(bytePosToRead - 1, bytePosToRead, data_bytes[bytePosToRead - 1],
-								data_bytes[bytePosToRead], i);
-						sampleBytes[1] = interpolate(bytePosToRead, bytePosToRead + 1, data_bytes[bytePosToRead],
-								data_bytes[bytePosToRead + 1], i+1);
-						if (j <= newSubchunk2Size) {
-							if (j == 0)
-								j = 2;
+						// First byte
+						sampleBytes[0] = interpolate(bytePosToRead, bytePosToRead + 2, data_bytes[bytePosToRead],
+								data_bytes[bytePosToRead + 2], bytePosToRead);
+						// Second byte
+						sampleBytes[1] = interpolate(bytePosToRead + 1, bytePosToRead + 3,
+								data_bytes[bytePosToRead + 1], data_bytes[bytePosToRead + 3], bytePosToRead + 1);
+						if (j < newSubchunk2Size) {
 							System.arraycopy(sampleBytes, 0, newData_bytes, j, 2);
 							j = j + 2;
 						}
@@ -354,13 +345,17 @@ public class WavAudioFilter implements AudioFilter {
 			if (bitsPerSample == 8) {
 				// Reading 2 bytes (2*8 bits - 1 byte on the left & 1 byte on
 				// the right)
-				for (double i = 0; i < subchunk2Size; i += resampleFactor) {
+				for (float i = 0; i < subchunk2Size; i += resampleFactor) {
 					bytePosToRead = (int) Math.round(i);
 					if (bytePosToRead % 2 == 0) {
 						byte[] sampleBytes = new byte[2];
-						sampleBytes[0] = data_bytes[bytePosToRead];
-						sampleBytes[1] = data_bytes[bytePosToRead + 1];
-						if (j <= newSubchunk2Size) {
+						// Left
+						sampleBytes[0] = interpolate(bytePosToRead, bytePosToRead + 2, data_bytes[bytePosToRead],
+								data_bytes[bytePosToRead + 2], i);
+						// Right
+						sampleBytes[1] = interpolate(bytePosToRead + 1, bytePosToRead + 3,
+								data_bytes[bytePosToRead + 1], data_bytes[bytePosToRead + 3], i + 1);
+						if (j < newSubchunk2Size) {
 							System.arraycopy(sampleBytes, 0, newData_bytes, j, 2);
 							j = j + 2;
 						}
@@ -372,15 +367,41 @@ public class WavAudioFilter implements AudioFilter {
 			if (bitsPerSample == 16) {
 				// Reading 4 bytes (2*16 bits - 2 bytes on the left & 2 bytes on
 				// the right)
-				for (double i = 0; i < subchunk2Size; i += resampleFactor * 2) {
+				// for (float i = 0; i < subchunk2Size; i += resampleFactor * 2)
+				// {
+				// bytePosToRead = (int) Math.round(i);
+				// if (bytePosToRead % 2 == 0 && (subchunk2Size - bytePosToRead)
+				// >= 4) {
+				// byte[] sampleBytes = new byte[4];
+				// sampleBytes[0] = data_bytes[bytePosToRead];
+				// sampleBytes[1] = data_bytes[bytePosToRead + 1];
+				// sampleBytes[2] = data_bytes[bytePosToRead + 2];
+				// sampleBytes[3] = data_bytes[bytePosToRead + 3];
+				// if (j <= newSubchunk2Size - 4) {
+				// System.arraycopy(sampleBytes, 0, newData_bytes, j, 4);
+				// j = j + 4;
+				// }
+				// }
+				// }
+				for (float i = 0; i < subchunk2Size; i += resampleFactor * 2) {
 					bytePosToRead = (int) Math.round(i);
-					if (bytePosToRead % 2 == 0 && (subchunk2Size - bytePosToRead) >= 4) {
+					if (bytePosToRead % 2 == 0 && (subchunk2Size - bytePosToRead) >= 8) {
 						byte[] sampleBytes = new byte[4];
-						sampleBytes[0] = data_bytes[bytePosToRead];
-						sampleBytes[1] = data_bytes[bytePosToRead + 1];
-						sampleBytes[2] = data_bytes[bytePosToRead + 2];
-						sampleBytes[3] = data_bytes[bytePosToRead + 3];
-						if (j <= newSubchunk2Size - 4) {
+						// Left
+						// First byte
+						sampleBytes[0] = interpolate(bytePosToRead, bytePosToRead + 4, data_bytes[bytePosToRead],
+								data_bytes[bytePosToRead + 4], bytePosToRead);
+						// Second byte
+						sampleBytes[1] = interpolate(bytePosToRead + 1, bytePosToRead + 5,
+								data_bytes[bytePosToRead + 1], data_bytes[bytePosToRead + 5], bytePosToRead + 1);
+						// Right
+						// First byte
+						sampleBytes[2] = interpolate(bytePosToRead + 2, bytePosToRead + 6,
+								data_bytes[bytePosToRead + 2], data_bytes[bytePosToRead + 6], bytePosToRead + 2);
+						// Second byte
+						sampleBytes[3] = interpolate(bytePosToRead + 3, bytePosToRead + 7,
+								data_bytes[bytePosToRead + 3], data_bytes[bytePosToRead + 7], bytePosToRead + 3);
+						if (j < newSubchunk2Size - 4) {
 							System.arraycopy(sampleBytes, 0, newData_bytes, j, 4);
 							j = j + 4;
 						}
